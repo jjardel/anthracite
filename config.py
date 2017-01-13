@@ -40,6 +40,6 @@ plugins = []
 #plugins = ['vimeo_analytics', 'vimeo_add_forms']
 
 # SQ specific constants
-USERS = ['Archit Jain', 'Farzad Vafaee', 'Joachim Hubele', 'John Jardel', 'Jun Xue', 'Mark Gorman', 'Mark Schwarz', 'Niral Patel', 'Qiong Zeng', 'Hitesh Singh', 'Samuel Taylor', 'Jeff Killeen', 'Vijayant Soni']
+USERS = ['Archit Jain', 'Farzad Vafaee', 'Joachim Hubele', 'John Jardel', 'Jun Xue', 'Mark Gorman', 'Mark Schwarz', 'Niral Patel', 'Qiong Zeng', 'Hitesh Singh', 'Samuel Taylor', 'Jeff Killeen', 'Vijayant Soni', 'Abhishek Jain']
 SERVERS = ['etl-dev-1.private.square-root.com', 'etl-stg-1.private.square-root.com', 'etl-prd-1.private.square-root.com', 'etl-dev-vw-1.private.square-root.com', 'etl-stg-vw-1.private.square-root.com', 'etl-prd-vw-1.private.square-root.com', 'etl-dev-mt-1.private.square-root.com', 'etl-stg-mt-1.private.square-root.com', 'etl-prd-mt-1.private.square-root.com']
-EVENT_TYPES = ['LateFiles', 'Quarantine', 'FileLoadErrors', 'ConfigWarnings', 'DataQualityCheck', 'BuildFailures', 'etl_milestones']
+EVENT_TYPES = ['etl_milestones', 'build_failures', 'late_file', 'quarantine', 'data_quality', 'file_delivery']
