@@ -64,8 +64,8 @@
 
             <div style="float:left; overflow:hidden; padding-left:15px">
             <label>
-                <input type="checkbox" name="status" value="closed" id="closed"/>
-                Closed
+                <input type="checkbox" name="status" value="close" id="close"/>
+                Close
             </label>
             </div>
         </fieldset>
@@ -102,11 +102,10 @@
             <form>
             <fieldset>
                 % for server in servers:
-                    % server_name = server.replace('.private.square-root.com', '')
                     <div style="float:left; overflow:hidden; padding-left:15px">
                     <label>
                         <input type="checkbox" name="env" value="{{server}}" id="{{server}}">
-                        {{server_name}}
+                        {{server}}
                     </label>
                     </div>
                 % end
@@ -149,15 +148,15 @@
         <a data-id="{{event.event_id}}" href="#modal-ignore" role="button" class="open-modal-ignore btn" data-toggle="modal">Ignore</a>
         <a data-id="{{event.event_id}}" href="#modal-reassign" role="button" class="open-modal-reassign btn" data-toggle="modal">Reassign</a>
         <a data-id="{{event.event_id}}" href="#modal-close" role="button" class="open-modal-close btn" data-toggle="modal">Close</a>
-        <a data-id="{{event.event_id}}" href="#modal-comment" role="button" class="open-modal-comment btn btn-primary" data-toggle="modal">Comment</a><br>
-        <a data-id="{{event.event_id}}" href="#modal-quality" role="button" class="open-modal-quality btn btn-info" data-toggle="modal">Feedback</a>
+        <!-- <a data-id="{{event.event_id}}" href="#modal-comment" role="button" class="open-modal-comment btn btn-primary" data-toggle="modal">Comment</a><br> -->
+        <!-- <a data-id="{{event.event_id}}" href="#modal-quality" role="button" class="open-modal-quality btn btn-info" data-toggle="modal">Feedback</a> -->
 	% else:
 	
         <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-ignore btn" data-toggle="modal">Ignore</a>
         <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-reassign btn" data-toggle="modal">Reassign</a>
         <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-close btn" data-toggle="modal">Close</a>
-        <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-comment btn btn-primary" data-toggle="modal">Comment</a><br>
-        <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-quality btn btn-info" data-toggle="modal">Feedback</a>
+        <!-- <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-comment btn btn-primary" data-toggle="modal">Comment</a><br> -->
+        <!-- <a data-id="{{event.event_id}}" href="#modal-unknown" role="button" class="open-modal-quality btn btn-info" data-toggle="modal">Feedback</a> -->
 	% end
         </div>
     </td>
@@ -185,8 +184,6 @@
                 <span class="label label-{{tag_class}}">{{tag}}</span>
             %end
 
-        <!-- don't show valid flag -->
-        % del event.extra_attributes['valid']
         % if 'comments' in event.extra_attributes:
             % comments = event.extra_attributes['comments']
             % del event.extra_attributes['comments']
@@ -256,9 +253,9 @@ $("#filterEvents").text("showing " + listCount + " of " + maxCount  + " events")
       <input type="hidden" name="event_desc" value="GARBAGE">
 
       <!-- now for the attributes that matter -->
-      <input type="hidden" name="status"  value="closed">
+      <input type="hidden" name="status"  value="close">
       <input type="hidden" name="event_id" id="close-event_id" value="">
-      <input type="text" name="resolution"  value="" id="close-form-resolution" required>
+      <input type="text" name="resolution" value="" id="close-form-resolution" required>
     </div>
 
     <div class="modal-footer">
@@ -294,7 +291,6 @@ $("#filterEvents").text("showing " + listCount + " of " + maxCount  + " events")
 
     <div class="modal-body">
 
-
       <!-- have to pass these fields for events_edit_post_script(), but their values get overwritten -->
       <input type="hidden" name="event_timestamp" value="GARBAGE">
       <input type="hidden" name="event_desc" value="GARBAGE">
@@ -302,7 +298,9 @@ $("#filterEvents").text("showing " + listCount + " of " + maxCount  + " events")
       <!-- now for the attributes that matter -->
       <input type="hidden" name="status"  value="ignore">
       <input type="hidden" name="event_id" id="ignore-event_id" value="">
-      <input type="number" min="1" max="365"  name="ignore"  value="" id="ignore-form-ndays">
+      <input type="number" min="1" max="365" name="ignore_days" value="" id="ignore-form-ndays">
+      <h3 id="ignoreLabel">Ignore for how many hours?</h3>
+      <input type="number" min="1" max="24" name="ignore_hours" value="" id="ignore-form-nhours">
 
     </div>
 
@@ -458,7 +456,7 @@ $('#modal-form-close').on('submit', function(e){
                   alert('something went wrong')
               },
               success: function(data){
-              $("#" + eventID + "-status").replaceWith(("#" + eventID + "-status", "closed"));
+              $("#" + eventID + "-status").replaceWith(("#" + eventID + "-status", "close"));
               $("#" + eventID + "-resolution").replaceWith(("#" + eventID + "-resolution", $('#close-form-resolution').val()));
               }
          });
@@ -487,7 +485,7 @@ $('#modal-form-close').on('submit', function(e){
 $('#modal-form-ignore').on('submit', function(e){
       var eventID = $('#ignore-event_id').val();
       $.ajax({
-              url: '/events/edit/' + eventID + '/script',
+              url: '/events/edit/' + eventID + '/ignore',
               data: $('#modal-form-ignore').serialize(),
               type: 'POST',
               error: function(data){
@@ -495,7 +493,8 @@ $('#modal-form-ignore').on('submit', function(e){
                   },
               success: function(data){
               $("#" + eventID + "-status").replaceWith(("#" + eventID + "-status", "ignore"));
-              $("#" + eventID + "-ignore").replaceWith(("#" + eventID + "-ignore", $('#ignore-form-ndays').val()));
+              $("#" + eventID + "-ignore_days").replaceWith(("#" + eventID + "-ignore", $('#ignore-form-ndays').val()));
+              $("#" + eventID + "-ignore_hours").replaceWith(("#" + eventID + "-ignore", $('#ignore-form-ndays').val()));
               }
          });
     $('#modal-ignore').modal('hide');
@@ -522,7 +521,7 @@ $('#modal-form-ignore').on('submit', function(e){
 $('#modal-form-reassign').on('submit', function(e){
       var eventID = $('#reassign-event_id').val();
       $.ajax({
-              url: '/events/edit/' + eventID + '/script',
+              url: '/events/edit/' + eventID + '/reassign',
               data: $('#modal-form-reassign').serialize(),
               type: 'POST',
               error: function(data){
@@ -717,7 +716,6 @@ var filterCount = 0;
 		$("input[name=env]").on( "change", function() {
 			if (this.checked) {
 				byEnv.push("[data-category~='" + $(this).attr("value") + "']");
-				byEnv.push("[data-category~='" + $(this).attr("value").replace('.private.square-root.com', '') + "']");
 			}
 			else removeA(byEnv, "[data-category~='" + $(this).attr("value") + "']");
 		});		
@@ -801,16 +799,14 @@ var filterCount = 0;
 					}
 				}
 
-                if (byEnv.length) {
+        if (byEnv.length) {
 					if (str == "Include items \n") {
 						str += "    " + "with (" +  byEnv.join(' OR ') + ")\n";
 						$($('input[name=env]:checked')).each(function(index, byEnv){
 							if(selector === '') {
 								selector += "[data-category~='" + byEnv.id + "']";
-								selector += ",[data-category~='" + byEnv.id.replace('.private.square-root.com', '') + "']";
 							} else {
 								selector += ",[data-category~='" + byEnv.id + "']";
-								selector += ",[data-category~='" + byEnv.id.replace('.private.square-root.com', '') + "']";
 							}
 						});
 					} else {
@@ -818,10 +814,8 @@ var filterCount = 0;
 						$($('input[name=env]:checked')).each(function(index, byEnv){
 							if(eselector === '') {
 								eselector += "[data-category~='" + byEnv.id + "']";
-								eselector += ",[data-category~='" + byEnv.id.replace('.private.square-root.com', '') + "']";
 							} else {
 								eselector += ",[data-category~='" + byEnv.id + "']";
-								eselector += ",[data-category~='" + byEnv.id.replace('.private.square-root.com', '') + "']";
 							}
 						});
 					}
@@ -863,7 +857,7 @@ var filterCount = 0;
 				$lis.show();
 				filterCount = $lis.size()-1;
 			}	
-                        $('#filterEvents').text("showing " + filterCount + " of " + maxCount + " events");			  
+      $('#filterEvents').text("showing " + filterCount + " of " + maxCount + " events");			  
 			$("#result").html(str);	
 	
 		});

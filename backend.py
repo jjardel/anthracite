@@ -1,10 +1,13 @@
 from types import IntType, StringType, UnicodeType
-from config import EVENT_TYPES
+from config import EVENT_LABELS, EVENTS_TABLE, DB_HOST, DB_PORT, DB_NAME, DB_USER
 import time
 import datetime
 import calendar
 import os
 import sys
+import json
+
+from sq_sql.db_client import DBClient
 
 
 class Config(dict):
@@ -77,224 +80,15 @@ class Event():
         raise AttributeError("no attribute %s" % nm)
 
 
-class Reportpoint():
-
-    def __init__(self, event, outages, muptime, ttf, tttf, ttd, tttd, ttr, tttr):
-        self.event = event
-        self.outages = outages  # number of outages occured until now (including this one, if appropriate)
-        self.muptime = muptime
-        self.ttf = ttf
-        self.tttf = tttf
-        self.ttd = ttd
-        self.tttd = tttd
-        self.ttr = ttr
-        self.tttr = tttr
-
-    def __getattr__(self, nm):
-        divisor = self.outages
-        if divisor == 0:
-            divisor = 1
-        if nm == 'mttf':
-            return self.tttf / divisor
-        if nm == 'mttd':
-            return self.tttd / divisor
-        if nm == 'mttr':
-            return self.tttr / divisor
-        raise AttributeError("no attribute %s" % nm)
-
-
 class Backend():
 
     def __init__(self, config=None):
         sys.path.append("%s/%s" % (os.getcwd(), 'python-dateutil'))
         sys.path.append("%s/%s" % (os.getcwd(), 'requests'))
         sys.path.append("%s/%s" % (os.getcwd(), 'rawes'))
-        import rawes
-        import requests
-        from rawes.elastic_exception import ElasticException
-        # pyflakes doesn't like globals()['ElasticException'] = ElasticException  so:
-        self.ElasticException = ElasticException
-        if config is None:
-            import config
-            config = Config(config)
-        self.config = config
-        self.es = rawes.Elastic(config.es_url, except_on_error=True)
-        # make sure the index exists
-        try:
-            # to explain the custom mapping:
-            # * _source enabled is maybe not really needed, but it's easiest at
-            # least. we just need to be able to reconstruct the original document.
-            # * tags are not analyzed so that when we want to get a list of all
-            # tags (a facet search) it returns the original tags, not the
-            # tokenized terms.
-            self.es.post(config.es_index, data={
-                "mappings": {
-                    "event": {
-                        "_source": {
-                            "enabled": True
-                        },
-                        "properties": {
-                            "tags": {
-                                "type": "string",
-                                "index": "not_analyzed"
-                            },
-                            "DWDataSource": {
-                                "type": "multi_field",
-                                "fields": {
-                                    "DWDataSource" : {
-                                        "type": "string",
-                                        "index" : "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                }
-                            },
-                            "data_point": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "data_point": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "sql_query": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "sql_query": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "owner": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "owner": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "desc": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "desc": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "FileName": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "FileName": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "host": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "host": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            } ,
-                            "job": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "job": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "file": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "file": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "last_file_load": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "last_file_load": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            },
-                            "sample_date": {
-                                "type": "multi_field",
-                                "fields":{
-                                    "sample_date": {
-                                        "type": "string",
-                                        "index": "analyzed",
-                                        "index_analyzer": "whitespace",
-                                        "search_analyzer": "whitespace"},
-                                    "exact": {
-                                        "type": "string",
-                                        "index": "not_analyzed"}
-                                    }
-                            }
-                        }
-                    }
-                }
-            })
-            print "created new ElasticSearch Index"
-        except ElasticException as e:
-            import re
-            if 'IndexAlreadyExistsException' in e.result['error']:
-                pass
-            else:
-                raise
-        except requests.exceptions.ConnectionError as e:
-            sys.stderr.write("Could not connect to ElasticSearch: %s" % e)
-            sys.exit(2)
+
+        self.db_client = DBClient(dbName=DB_NAME, dbServer=DB_HOST,
+                 dbUser=DB_USER, dbPort=DB_PORT)
 
     def object_to_dict(self, event):
         iso = self.unix_timestamp_to_iso8601(event.timestamp)
@@ -309,241 +103,159 @@ class Backend():
     def unix_timestamp_to_iso8601(self, unix_timestamp):
         return datetime.datetime.utcfromtimestamp(unix_timestamp).isoformat()
 
-    def iso8601_to_unix_timestamp(self, iso8601):
-        '''
-            elasticsearch returns something like 2013-03-20T20:41:16
+    def db_row_to_object(self, event):
+        event_id = event['id']
+        unix = int(event['inserted_at'])
+        extra_attributes = {}
+        extra_attributes['description'] = event['description']
+        extra_attributes['description'] = event['description']
+        extra_attributes['owner'] = event['owner']
+        extra_attributes['status'] = event['status']
+        extra_attributes['event_id'] = event['id']
 
-        '''
-        unix = calendar.timegm(datetime.datetime.strptime(iso8601, "%Y-%m-%dT%H:%M:%S").timetuple())
-        return unix
+        # adding server where event happened
+        if event['extra_attributes'].get('hostname'):
+            extra_attributes['host'] = event['extra_attributes'].get('hostname').replace('.private.square-root.com', '')
+        else:
+            extra_attributes['host'] = event['extra_attributes'].get('server').replace('.private.square-root.com', '')
 
-    def hit_to_object(self, hit):
-        event_id = hit['_id']
-        hit = hit['_source']
-        unix = self.iso8601_to_unix_timestamp(hit['date'])
-        extra_attributes= {}
-        for (k, v) in hit.items():
+        for k in event['extra_attributes']:
             if k not in ('desc', 'tags', 'date'):
-                extra_attributes[k] = v
-        return Event(timestamp=unix, desc=hit['desc'], tags=hit['tags'], event_id=event_id, extra_attributes=extra_attributes)
+                if k == 'server':
+                    extra_attributes[k] = event['extra_attributes'][k].replace('.private.square-root.com', '')
+                else:
+                    extra_attributes[k] = event['extra_attributes'][k]
 
-    def add_event(self, event):
-        ret = self.es.post('%s/event' % self.config.es_index, data=self.object_to_dict(event))
-        return ret['_id']
+        return Event(timestamp=unix, desc=event['title'], tags=[event['label']], event_id=event_id, extra_attributes=extra_attributes)
 
-    def delete_event(self, event_id):
-        try:
-            self.es.delete('%s/event/%s' % (self.config.es_index, event_id))
-        except self.ElasticException as e:
-            if 'found' in e.result and not e.result['found']:
-                raise Exception("Document %s can't be found" % event_id)
-            else:
-                raise
+    def close_event(self, event_id, resolution):
+        query = """
+            UPDATE {table_name}
+            SET status='close',
+                resolution='{resolution}',
+                closed_at = extract(EPOCH FROM now())
+            WHERE id='{event_id}' AND status='open'
+            RETURNING *
+            """.format(table_name=EVENTS_TABLE, resolution=resolution, event_id=event_id)
 
-    def edit_event(self, event):
-        self.es.post('%s/event/%s/_update' % (self.config.es_index, event.event_id), data={'doc': self.object_to_dict(event)})
+        event = self.db_client.RunQuery(query, 'list_of_dicts')
+        
+        if event:
+            event_obj = self.db_row_to_object(event[0])
+            return event_obj
+        else:
+            return None
+
+    def reassign_event(self, event_id, new_owner):
+        # get event info from DB and then modify
+        event = self.db_client.RunQuery("""
+                    SELECT *
+                    FROM {table_name}
+                    WHERE id='{event_id}'
+                    """.format(table_name=EVENTS_TABLE, event_id=event_id), 'list_of_dicts')[0]
+
+        old_owner = event['owner']
+        recipients = event['recipients']
+        priority_recipients = event['priority_recipients']
+
+        # modifying recipients
+        # remove old owner
+        if old_owner in recipients:
+            recipients.remove(old_owner)
+            # add new owner if not present
+            if new_owner not in recipients:
+                recipients.append(new_owner)
+
+        # modifying priority_recipients
+        # for each level do the same as above
+        for key in priority_recipients:
+            recipient_list = priority_recipients[key]
+            # remove old owner
+            if old_owner in recipient_list:
+                recipient_list.remove(old_owner)
+                # add new owner if not present
+                if new_owner not in recipient_list:
+                    recipient_list.append(new_owner)
+            # replacing in dict
+            priority_recipients[key] = recipient_list
+
+        query = """
+            UPDATE {table_name}
+            SET owner = '{owner}',
+                recipients = '{recipients}',
+                priority_recipients = '{priority_recipients}'
+            WHERE id='{event_id}'
+            RETURNING *
+            """.format(table_name=EVENTS_TABLE, owner=new_owner, recipients=json.dumps(recipients), priority_recipients=json.dumps(priority_recipients), event_id=event_id)
+
+        event = self.db_client.RunQuery(query, 'list_of_dicts')
+        if event:
+            event_obj = self.db_row_to_object(event[0])
+            return event_obj
+        else:
+            return None
+
+    def ignore_event(self, event_id, ignore_days, ignore_hours):
+        ignore_days = ignore_days if ignore_days else 0
+        ignore_hours = ignore_hours if ignore_hours else 0
+
+        query = """
+            UPDATE {table_name}
+            SET status='ignore',
+                ignore_starts_at=extract(EPOCH FROM now()),
+                ignore_ends_at=(extract(EPOCH FROM now()) + (86400 * {ignore_days}) + (3600 * {ignore_hours}))
+            WHERE id='{event_id}' AND status IN ('open', 'ignore')
+            RETURNING *
+            """.format(table_name=EVENTS_TABLE, ignore_days=ignore_days, ignore_hours=ignore_hours, event_id=event_id)
+
+        event = self.db_client.RunQuery(query, 'list_of_dicts')
+        if event:
+            event_obj = self.db_row_to_object(event[0])
+            return event_obj
+        else:
+            return None
 
     @staticmethod
-    def prepare_tag_match_query():
-        query_params = []
-        for event_type in EVENT_TYPES:
-            query_params.append({ "match": { "tags": event_type}})
-        return query_params
+    def prepare_label_match_query():
+        in_clause = '\'' + '\',\''.join(EVENT_LABELS) + '\''
+        return in_clause
 
-    def es_get_events(self, query = None):
+    def db_get_events(self, query=None, limit=500):
         if query is None:
-            query = {
-                "bool": {
-                    "should": self.prepare_tag_match_query()
-                }
-            }
+            query = """
+            SELECT *
+            FROM {table_name}
+            WHERE label IN ({in_clause})
+            LIMIT {limit}
+            """.format(table_name=EVENTS_TABLE, in_clause=self.prepare_label_match_query(), limit=limit)
 
-        return self.es.get('%s/event/_search?size=5000' % self.config.es_index, data={
-            "query": query,
-            "sort": [
-                {
-                    "date": {
-                        "order": "desc",
-                        "ignore_unmapped": True  # avoid 'No mapping found for [date] in order to sort on' when we don't have data yet
-                    }
-                }
-            ]
-        })
-
-    def get_events_raw(self, query=None):
-        '''
-        return format that's optimized for elasticsearch
-        '''
-        hits = self.es_get_events(query)
-        events = hits['hits']['hits']
-        for (i, event) in enumerate(events):
-            event_id = event['_id']
-            events[i] = event['_source']
-            events[i]['id'] = event_id
-            events[i]['date'] = self.iso8601_to_unix_timestamp(events[i]['date'])
-        return events
+        return self.db_client.RunQuery(query, 'list_of_dicts')
 
     def get_events_objects(self, limit=500):
         # retuns a list of event objects
-        hits = self.es_get_events()
-        return [self.hit_to_object(event_hit) for event_hit in hits['hits']['hits']][:limit]
+        events = self.db_get_events(limit=limit)
+        return [self.db_row_to_object(event) for event in events]
 
     def get_event(self, event_id):
         # http://localhost:9200/dieterfoobarbaz/event/PZ1su5w5Stmln_c2Kc4B2g
-        event_hit = self.es.get('%s/event/%s' % (self.config.es_index, event_id))
-        event_obj = self.hit_to_object(event_hit)
+        event = self.db_client.RunQuery("""
+            SELECT *
+            FROM {table_name}
+            WHERE id='{event_id}'
+            """.format(table_name=EVENTS_TABLE, event_id=event_id), 'list_of_dicts')
+        event_obj = self.db_row_to_object(event[0])
         return event_obj
 
-    def get_tags(self):
-        # get all different tags
-        # curl -X POST "http://localhost:9200/anthracite/_search?pretty=true&size=0" -d '{  "query" : {"query_string" : {"query" : "*"}}, "facets":{"tags" : { "terms" : {"field" : "tags"} }}}"'
-        tags = self.es.post('%s/_search?size=0' % self.config.es_index, data={
-            'query': {
-                'query_string': {
-                    'query': '*'
-                }
-            },
-            'facets': {
-                'tags': {
-                    'terms': {
-                        'field': 'tags'
-                    }
-                }
-            }
-        })
-        tags = tags['facets']['tags']['terms']
-        tags = [t['term'] for t in tags]
-        return tags
-
-    def get_events_range(self):
-        low = self.es.post('%s/_search?size=1' % self.config.es_index, data={
-            "query": {
-		"match_all": {
-		}
-            },
-            "sort": [
-                {
-                    "date": {
-                        "order": "asc",
-                        "ignore_unmapped": True  # avoid 'No mapping found for [date] in order to sort on' when we don't have data yet
-                    }
-                }
-            ]
-        })
-        # if there's not a single record in the database:
-        if not len(low['hits']['hits']):
-            return (0, time.time())
-        high = self.es.post('%s/_search?size=1' % self.config.es_index, data={
-            "query": {
-		"match_all": {
-		}
-            },
-            "sort": [
-                {
-                    "date": {
-                        "order": "desc",
-                        "ignore_unmapped": True  # avoid 'No mapping found for [date] in order to sort on' when we don't have data yet
-                    }
-                }
-            ]
-        })
-        low = self.iso8601_to_unix_timestamp(low['hits']['hits'][0]['_source']['date'])
-        high = self.iso8601_to_unix_timestamp(high['hits']['hits'][0]['_source']['date'])
-        return (low, high)
+    def get_labels(self):
+        # get all different labels
+        labels = EVENT_LABELS
+        return labels
 
     def get_events_count(self):
         count = 0
-        query = {
-            "bool": {
-                "should": self.prepare_tag_match_query()
-            }
-        }
+        count = self.db_client.RunQuery("""
+            SELECT COUNT(*)
+            FROM {table_name}
+            """.format(table_name=EVENTS_TABLE), 'list')[0]
 
-        #events = self.es.get('%s/event/_search' % self.config.es_index)
-        events = self.es.get('%s/event/_search?size=5000' % self.config.es_index,
-                             data={"query": query,
-                             "sort": [{
-                             "date": {
-                             "order": "desc",
-                             "ignore_unmapped": True  # avoid 'No mapping found for [date] in order to sort on' when we don't have data yet
-                             }}]})
-        count = events['hits']['total']
         return count
-
-    def get_outage_events(self):
-        # TODO sanity checking (order of detected, resolved tags, etc)
-        hits = self.es.get('%s/event/_search' % self.config.es_index, data={
-            'query': {
-                'query_string': {
-                    'query': 'tag like outage=_%'
-                }
-            },
-            "sort": [
-                {
-                    "date": {
-                        "order": "asc",
-                        "ignore_unmapped": True  # avoid 'No mapping found for [date] in order to sort on' when we don't have data yet
-                    }
-                }
-            ]
-        })
-        events = []
-        for event_hit in hits['hits']['hits']:
-            event_obj = self.hit_to_object(event_hit)
-            events.append(event_obj)
-        return events
-
-
-class PluginError(Exception):
-
-    def __init__(self, plugin, msg, underlying_error):
-        self.plugin = plugin
-        self.msg = msg
-        self.underlying_error = underlying_error
-
-    def __str__(self):
-        return "%s -> %s (%s)" % (self.plugin, self.msg, self.underlying_error)
-
-
-def load_plugins(plugins_to_load, config):
-    '''
-    loads all the plugins sub-modules
-    returns encountered errors, doesn't raise them because
-    whoever calls this function defines how any errors are
-    handled. meanwhile, loading must continue
-    '''
-    import plugins
-    errors = []
-    add_urls = {}
-    remove_urls = []
-    loaded_plugins = []
-    plugins_dir = os.path.dirname(plugins.__file__)
-    wd = os.getcwd()
-    os.chdir(plugins_dir)
-    for module in plugins_to_load:
-        try:
-            print "importing plugin '%s'" % module
-            imp = __import__('plugins.' + module, {}, {}, ['*'])
-            loaded_plugins.append(imp)
-            try:
-                add_urls[module] = imp.add_urls
-            except Exception:
-                pass
-            try:
-                remove_urls.extend(imp.remove_urls)
-            except Exception:
-                pass
-        except Exception, e:
-            errors.append(PluginError(module, "Failed to add plugin '%s'" % module, e))
-            continue
-
-    os.chdir(wd)
-    state = {
-        'add_urls': add_urls,
-        'remove_urls': remove_urls,
-        'loaded_plugins': loaded_plugins
-    }
-    #  make some vars accessible for all imported plugins
-    __builtins__['state'] = state
-    __builtins__['config'] = config
-    return (state, errors)
