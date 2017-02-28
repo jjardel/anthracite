@@ -48,6 +48,7 @@ DB_NAME = os.environ.get('DEFAULT_DB', 'dw-admin')
 DB_USER = os.environ.get('DB_USER', 'reporter')
 EVENTS_TABLE = 'PDMAutoUpdate_deliver.nagbot_sent_notifications'
 
+ENV = os.environ.get('ETL_ENV_NAME', 'DEV')
 USERS = ['Archit Jain', 'Farzad Vafaee', 'Joachim Hubele', 'John Jardel', 'Jun Xue', 'Mark Gorman', 'Mark Schwarz', 'Niral Patel', 'Qiong Zeng', 'Hitesh Singh', 'Samuel Taylor', 'Jeff Killeen', 'Vijayant Soni', 'Abhishek Jain']
 SERVERS = ['etl-dev-1', 'etl-stg-1', 'etl-prd-1', 'etl-dev-vw-1', 'etl-stg-vw-1', 'etl-prd-vw-1', 'etl-dev-mt-1', 'etl-stg-mt-1', 'etl-prd-mt-1']
 EVENT_LABELS = ['etl_milestones', 'build_failure', 'late_file', 'quarantine', 'data_quality', 'file_delivery']

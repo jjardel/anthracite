@@ -7,7 +7,7 @@ import os
 import sys
 import json
 
-from sq_sql.db_client import DBClient
+from sq_sql import DBClient
 
 
 class Config(dict):
@@ -134,15 +134,15 @@ class Backend():
             SET status='close',
                 resolution='{resolution}',
                 closed_at = extract(EPOCH FROM now())
-            WHERE id='{event_id}' AND status='open'
+            WHERE id='{event_id}'
+                AND status='open'
             RETURNING *
             """.format(table_name=EVENTS_TABLE, resolution=resolution, event_id=event_id)
 
         event = self.db_client.RunQuery(query, 'list_of_dicts')
         
-        if event:
-            event_obj = self.db_row_to_object(event[0])
-            return event_obj
+        if event and event[0]:
+            return event[0]
         else:
             return None
 
@@ -189,9 +189,9 @@ class Backend():
             """.format(table_name=EVENTS_TABLE, owner=new_owner, recipients=json.dumps(recipients), priority_recipients=json.dumps(priority_recipients), event_id=event_id)
 
         event = self.db_client.RunQuery(query, 'list_of_dicts')
-        if event:
-            event_obj = self.db_row_to_object(event[0])
-            return event_obj
+        
+        if event and event[0]:
+            return event[0], old_owner
         else:
             return None
 
@@ -209,9 +209,9 @@ class Backend():
             """.format(table_name=EVENTS_TABLE, ignore_days=ignore_days, ignore_hours=ignore_hours, event_id=event_id)
 
         event = self.db_client.RunQuery(query, 'list_of_dicts')
-        if event:
-            event_obj = self.db_row_to_object(event[0])
-            return event_obj
+        
+        if event and event[0]:
+            return event[0]
         else:
             return None
 
@@ -225,7 +225,8 @@ class Backend():
             query = """
             SELECT *
             FROM {table_name}
-            WHERE label IN ({in_clause})
+            WHERE owner IS NOT NULL
+                AND label IN ({in_clause})
             LIMIT {limit}
             """.format(table_name=EVENTS_TABLE, in_clause=self.prepare_label_match_query(), limit=limit)
 
@@ -256,6 +257,7 @@ class Backend():
         count = self.db_client.RunQuery("""
             SELECT COUNT(*)
             FROM {table_name}
+            WHERE owner IS NOT NULL
             """.format(table_name=EVENTS_TABLE), 'list')[0]
 
         return count

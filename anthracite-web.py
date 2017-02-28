@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 from bottle import route, run, debug, template, request, static_file, error, response, app, hook
 from backend import Backend, Event, Config
-from config import USERS, EVENT_LABELS, SERVERS
+from config import USERS, EVENT_LABELS, SERVERS, ENV
 import json
 import os
 import time
@@ -14,6 +14,8 @@ from slacker import Slacker
 import __builtin__
 sys.path.append('%s/beaker' % os.path.dirname(os.path.realpath(__file__)))
 from beaker.middleware import SessionMiddleware
+
+from sq_kafka import KafkaNotificationProducer
 
 session = None
 
@@ -127,43 +129,43 @@ def events_table(**kwargs):
         "BuildFailures": ['host', 'job'],
         "etl_milestones": ['host', 'job']
     }
-    currentevents = []
-    event_group_parsed = set()
+    # currentevents = []
+    # event_group_parsed = set()
 
     # tag specific filtering to avoid cluttering of anthracite
-    for e in events:
-        tag_matched = False
-        for event_type in keys_to_filter_events:
-            if event_type in e.tags:
-                tag_matched = True
-                value_list = []
-                for key in keys_to_filter_events[event_type]:
-                    if e.extra_attributes.get(key):
-                        value_list.append(e.extra_attributes[key])
+    # for e in events:
+    #     tag_matched = False
+    #     for event_type in keys_to_filter_events:
+    #         if event_type in e.tags:
+    #             tag_matched = True
+    #             value_list = []
+    #             for key in keys_to_filter_events[event_type]:
+    #                 if e.extra_attributes.get(key):
+    #                     value_list.append(e.extra_attributes[key])
 
-                # checking presence of keys on which we need to apply filtering
-                # break if key is not present
-                # ignoring such events
-                if len(keys_to_filter_events[event_type]) != len(value_list):
-                    break
+    #             # checking presence of keys on which we need to apply filtering
+    #             # break if key is not present
+    #             # ignoring such events
+    #             if len(keys_to_filter_events[event_type]) != len(value_list):
+    #                 break
 
-                # checking if same combination has already been parsed or not
-                # break if already parsed
-                if (event_type, tuple(value_list)) not in event_group_parsed:
-                    event_group_parsed.add((event_type, tuple(value_list)))
-                    currentevents.append(e)
-                else:
-                    break
+    #             # checking if same combination has already been parsed or not
+    #             # break if already parsed
+    #             if (event_type, tuple(value_list)) not in event_group_parsed:
+    #                 event_group_parsed.add((event_type, tuple(value_list)))
+    #                 currentevents.append(e)
+    #             else:
+    #                 break
 
-                # breaking inner loop in order to avoid appending same event twice
-                # if it has two tags satisfying above conditions
-                break
+    #             # breaking inner loop in order to avoid appending same event twice
+    #             # if it has two tags satisfying above conditions
+    #             break
 
-        # if tags does not match with any predefined event types then just show the event
-        if not tag_matched:
-            currentevents.append(e)
+    #     # if tags does not match with any predefined event types then just show the event
+    #     if not tag_matched:
+    #         currentevents.append(e)
 
-    return p(body=template('tpl/events_table', user=user, users=USERS, event_types=EVENT_LABELS, servers=SERVERS, events=currentevents), page='table', **kwargs)
+    return p(body=template('tpl/events_table', user=user, users=USERS, event_types=EVENT_LABELS, servers=SERVERS, events=events), page='table', **kwargs)
 
 
 # similar method exists below, but we need an int timestamp
@@ -177,6 +179,24 @@ def get_event_attributes(event):
     return ts, desc, tags, extra_attributes
 
 
+# copied logic from notifier.py
+def get_recipients(recipients, priority, priority_recipients, owner):
+    
+    _priority_no = int(priority.replace('P', ''))
+    _recipients = None
+
+    for idx in range(_priority_no, 6):
+        _current_priority = 'P' + str(idx)
+        _recipients = _recipients or priority_recipients.get(_current_priority)
+
+    _recipients = _recipients or recipients
+
+    # adding owner of event too
+    _recipients.append(owner)    
+
+    return _recipients
+
+
 # clicking on the close button
 @route('/events/edit/<event_id>/close', method='POST')
 def events_close_post_script(event_id):
@@ -186,22 +206,41 @@ def events_close_post_script(event_id):
         return 'Could not save close event: %s. Go back to previous page to retry' % e
 
     # publish kafka message about closing of event so that notification can be sent
-    # use "event" object fetched after updation from DB
-    #notify_on_close(message_dict)
+    title = 'Closed event'
+    description = 'Closed event having id {0}'.format(event['id'])
+    label = 'nagbot_notifications'
+    recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
+    producer = KafkaNotificationProducer()
+    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
     return render_last_page(['/events/edit/'], successes=['The event was closed'])
+
 
 # clicking on the reassign button
 @route('/events/edit/<event_id>/reassign', method='POST')
 def events_reassign_post_script(event_id):
     try:
-        event = backend.reassign_event(event_id=event_id, new_owner=request.forms['owner'])
+        new_owner = request.forms['owner']
+        event, old_owner = backend.reassign_event(event_id=event_id, new_owner=new_owner)
     except Exception, e:
         return 'Could not reassign event: %s. Go back to previous page to retry' % e
 
     # publish kafka message about closing of event so that notification can be sent
-    # use "event" object fetched after updation from DB
-    #notify_on_close(message_dict)
+    # sending message to old owner
+    title = 'Reassigned event'
+    description = 'Reassigned event having id {0} to {1}'.format(event['id'])
+    label = 'nagbot_notifications'
+    recipients = [old_owner]
+    producer = KafkaNotificationProducer()
+    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
+
+    # sending message to new user
+    title = 'Reassigned event'
+    description = '{0} reassigned event having id {0} to you'.format(event['id'], event['id'])
+    label = 'nagbot_notifications'
+    recipients = [new_owner]
+    producer = KafkaNotificationProducer()
+    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
     return render_last_page(['/events/edit/'], successes=['The event was reassigned'])
 
@@ -212,12 +251,15 @@ def events_ignore_post_script(event_id):
     try:
         event = backend.ignore_event(event_id=event_id, ignore_days=request.forms['ignore_days'], ignore_hours=request.forms['ignore_hours'])
     except Exception, e:
-        print 'Could not ignore event: %s. Go back to previous page to retry' % e
         return 'Could not ignore event: %s. Go back to previous page to retry' % e
 
     # publish kafka message about closing of event so that notification can be sent
-    # use "event" object fetched after updation from DB
-    #notify_on_close(message_dict)
+    title = 'Ignored event'
+    description = 'Ignored event having id {0}'.format(event['id'])
+    label = 'nagbot_notifications'
+    recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
+    producer = KafkaNotificationProducer()
+    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
     return render_last_page(['/events/edit/'], successes=['The event was ignored'])
 
