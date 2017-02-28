@@ -192,7 +192,8 @@ def get_recipients(recipients, priority, priority_recipients, owner):
     _recipients = _recipients or recipients
 
     # adding owner of event too
-    _recipients.append(owner)    
+    if owner not in _recipients:
+        _recipients.append(owner)
 
     return _recipients
 
