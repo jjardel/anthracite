@@ -1,17 +1,13 @@
 #!/usr/bin/env python2
 from bottle import route, run, debug, template, request, static_file, error, response, app, hook
-from backend import Backend, Event, Config
+from backend import Backend, Config, Event
 from config import USERS, EVENT_LABELS, SERVERS, ENV
-import json
 import os
 import time
 import sys
-import types
-import datetime
 from view import page
 from collections import deque
-from slacker import Slacker
-import __builtin__
+
 sys.path.append('%s/beaker' % os.path.dirname(os.path.realpath(__file__)))
 from beaker.middleware import SessionMiddleware
 
@@ -207,14 +203,20 @@ def events_close_post_script(event_id):
         return 'Could not save close event: %s. Go back to previous page to retry' % e
 
     # publish kafka message about closing of event so that notification can be sent
-    title = 'Closed event'
-    description = 'Closed event having id {0}'.format(event['id'])
-    label = 'nagbot_notifications'
-    recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
-    producer = KafkaNotificationProducer()
-    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
+    if isinstance(event, dict):
+        title = 'Closed event'
+        description = 'Closed event having id {0}'.format(event['id'])
+        label = 'nagbot_notifications'
+        recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
+        producer = KafkaNotificationProducer()
+        producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
-    return render_last_page(['/events/edit/'], successes=['The event was closed'])
+        return render_last_page(['/events/edit/'], successes=['The event was closed'])
+
+    else:
+        response.status = 404
+        response.body = 'Event not found or event is already closed'
+        return response
 
 
 # clicking on the reassign button
@@ -226,24 +228,29 @@ def events_reassign_post_script(event_id):
     except Exception, e:
         return 'Could not reassign event: %s. Go back to previous page to retry' % e
 
-    # publish kafka message about closing of event so that notification can be sent
-    # sending message to old owner
-    title = 'Reassigned event'
-    description = 'Reassigned event having id {0} to {1}'.format(event['id'])
-    label = 'nagbot_notifications'
-    recipients = [old_owner]
-    producer = KafkaNotificationProducer()
-    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
+    if isinstance(event, dict):
+        # publish kafka message about closing of event so that notification can be sent
+        # sending message to old owner
+        title = 'Reassigned event'
+        description = 'Reassigned event having id {0} to {1}'.format(event['id'])
+        label = 'nagbot_notifications'
+        recipients = [old_owner]
+        producer = KafkaNotificationProducer()
+        producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
-    # sending message to new user
-    title = 'Reassigned event'
-    description = '{0} reassigned event having id {0} to you'.format(event['id'], event['id'])
-    label = 'nagbot_notifications'
-    recipients = [new_owner]
-    producer = KafkaNotificationProducer()
-    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
+        # sending message to new user
+        title = 'Reassigned event'
+        description = '{0} reassigned event having id {1} to {2}'.format(old_owner, event['id'], new_owner)
+        label = 'nagbot_notifications'
+        recipients = [new_owner]
+        producer = KafkaNotificationProducer()
+        producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
-    return render_last_page(['/events/edit/'], successes=['The event was reassigned'])
+        return render_last_page(['/events/edit/'], successes=['The event was reassigned'])
+    else:
+        response.status = 404
+        response.body = 'Event not found'
+        return response
 
 
 # clicking on the ignore button
@@ -254,16 +261,21 @@ def events_ignore_post_script(event_id):
     except Exception, e:
         return 'Could not ignore event: %s. Go back to previous page to retry' % e
 
-    # publish kafka message about closing of event so that notification can be sent
-    title = 'Ignored event'
-    description = 'Ignored event having id {0}'.format(event['id'])
-    label = 'nagbot_notifications'
-    recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
-    producer = KafkaNotificationProducer()
-    producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
+    if isinstance(event, dict):
+        # publish kafka message about closing of event so that notification can be sent
+        title = 'Ignored event'
+        description = 'Ignored event having id {0}'.format(event['id'])
+        label = 'nagbot_notifications'
+        recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
+        producer = KafkaNotificationProducer()
+        producer.produce_notification(title=title, description=description, label=label, recipients=recipients, kafka_environment=ENV)
 
-    return render_last_page(['/events/edit/'], successes=['The event was ignored'])
+        return render_last_page(['/events/edit/'], successes=['The event was ignored'])
 
+    else:
+        response.status = 404
+        response.body = 'Event not found'
+        return response
 
 @route('/events/add', method='GET')
 @route('/events/add/ts=<timestamp_from_url>', method='GET')

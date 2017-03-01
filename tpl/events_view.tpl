@@ -57,7 +57,6 @@
                 <span class="label label-{{tag_class}}">{{tag}}</span>
             %end
 
-        % del event.extra_attributes['valid']
         % if 'comments' in event.extra_attributes:
             % comments = event.extra_attributes['comments']
             % del event.extra_attributes['comments']

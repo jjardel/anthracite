@@ -453,7 +453,7 @@ $('#modal-form-close').on('submit', function(e){
               data: $('#modal-form-close').serialize(),
               type: 'POST',
               error: function(data){
-                  alert('something went wrong')
+                  alert('Something went wrong. ' + data.responseText)
               },
               success: function(data){
               $("#" + eventID + "-status").replaceWith(("#" + eventID + "-status", "close"));
@@ -489,7 +489,7 @@ $('#modal-form-ignore').on('submit', function(e){
               data: $('#modal-form-ignore').serialize(),
               type: 'POST',
               error: function(data){
-                  alert('something went wrong');
+                  alert('Something went wrong. ' + data.responseText)
                   },
               success: function(data){
               $("#" + eventID + "-status").replaceWith(("#" + eventID + "-status", "ignore"));
@@ -525,7 +525,7 @@ $('#modal-form-reassign').on('submit', function(e){
               data: $('#modal-form-reassign').serialize(),
               type: 'POST',
               error: function(data){
-                  alert('something went wrong')
+                  alert('Something went wrong. ' + data.responseText)
               },
               success: function(data){
               $("#" + eventID + "-owner").replaceWith(("#" + eventID + "-owner", $('#owner').val()));

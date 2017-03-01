@@ -1,8 +1,6 @@
 from types import IntType, StringType, UnicodeType
 from config import EVENT_LABELS, EVENTS_TABLE, DB_HOST, DB_PORT, DB_NAME, DB_USER
-import time
 import datetime
-import calendar
 import os
 import sys
 import json
@@ -135,7 +133,7 @@ class Backend():
                 resolution='{resolution}',
                 closed_at = extract(EPOCH FROM now())
             WHERE id='{event_id}'
-                AND status='open'
+                AND status IN ('open', 'ignore')
             RETURNING *
             """.format(table_name=EVENTS_TABLE, resolution=resolution, event_id=event_id)
 
