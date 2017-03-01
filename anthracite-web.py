@@ -7,6 +7,7 @@ import time
 import sys
 from view import page
 from collections import deque
+from datetime import datetime
 
 sys.path.append('%s/beaker' % os.path.dirname(os.path.realpath(__file__)))
 from beaker.middleware import SessionMiddleware
@@ -232,7 +233,7 @@ def events_reassign_post_script(event_id):
         # publish kafka message about closing of event so that notification can be sent
         # sending message to old owner
         title = 'Reassigned event'
-        description = 'Reassigned event having id {0} to {1}'.format(event['id'])
+        description = 'Reassigned event having id {0} to {1}'.format(event['id'], new_owner)
         label = 'nagbot_notifications'
         recipients = [old_owner]
         producer = KafkaNotificationProducer()
@@ -264,7 +265,7 @@ def events_ignore_post_script(event_id):
     if isinstance(event, dict):
         # publish kafka message about closing of event so that notification can be sent
         title = 'Ignored event'
-        description = 'Ignored event having id {0}'.format(event['id'])
+        description = 'Ignored event having id {0} till {1}'.format(event['id'], datetime.fromtimestamp(int(event['ignore_ends_at'])).strftime('%Y-%m-%d %H:%M:%S'))
         label = 'nagbot_notifications'
         recipients = get_recipients(event['recipients'], event['current_priority'], event['priority_recipients'], event['owner'])
         producer = KafkaNotificationProducer()
@@ -274,7 +275,7 @@ def events_ignore_post_script(event_id):
 
     else:
         response.status = 404
-        response.body = 'Event not found'
+        response.body = 'Event not found or event is already closed'
         return response
 
 @route('/events/add', method='GET')
