@@ -259,3 +259,13 @@ class Backend():
             """.format(table_name=EVENTS_TABLE), 'list')[0]
 
         return count
+
+    def get_users(self):
+        users = []
+        users = self.db_client.RunQuery("""
+        SELECT user_name
+        from {table_name}
+        where is_dw = true
+        """.format(table_name='pdmautoupdate_clean.user_accounts'), 'list')
+
+        return users

@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 from bottle import route, run, debug, template, request, static_file, error, response, app, hook
 from backend import Backend, Config, Event
-from config import USERS, EVENT_LABELS, SERVERS, ENV
+from config import EVENT_LABELS, SERVERS, ENV
 import os
 import time
 import sys
@@ -162,7 +162,7 @@ def events_table(**kwargs):
     #     if not tag_matched:
     #         currentevents.append(e)
 
-    return p(body=template('tpl/events_table', user=user, users=USERS, event_types=EVENT_LABELS, servers=SERVERS, events=events), page='table', **kwargs)
+    return p(body=template('tpl/events_table', user=user, users=backend.get_users(), event_types=EVENT_LABELS, servers=SERVERS, events=events), page='table', **kwargs)
 
 
 # similar method exists below, but we need an int timestamp
